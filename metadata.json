@@ -1,0 +1,5 @@
+{
+  "name": "Musika",
+  "description": "A web application to track the daily commodity prices at Mbare Musika, using AI-generated market data for trend analysis.",
+  "requestFramePermissions": []
+}
