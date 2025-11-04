@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Commodity, BuyerOrder, ProducerYield, Theme, TransportBid, User } from './types';
 import { supabase } from './services/supabaseClient';
 import { fetchCommodityPrices } from './services/geminiService';
+import { dummyCommodities, dummyYields, dummyOrders, dummyTransportBids } from './services/dummyData';
 import { Header } from './components/Header';
 import CommodityList from './components/CommodityList';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -33,6 +34,7 @@ const App: React.FC = () => {
   const [yields, setYields] = useState<ProducerYield[]>([]);
   const [transportBids, setTransportBids] = useState<TransportBid[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isPreloading, setIsPreloading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('yields');
   const [offerModalYield, setOfferModalYield] = useState<ProducerYield | null>(null);
@@ -259,6 +261,75 @@ const App: React.FC = () => {
     setSortConfig({ key, direction });
   };
   
+  const handlePreloadData = async () => {
+    if (!currentUser) return;
+    setIsPreloading(true);
+    setError(null);
+    try {
+        // 1. Load commodity data locally
+        setCommodities(dummyCommodities);
+        setSelectedCommodity(dummyCommodities[0]);
+
+        // 2. Insert yields
+        const yieldsToInsert = dummyYields.map(y => ({ ...y, user_id: currentUser.id, producerName: currentUser.email }));
+        const { data: insertedYields, error: yieldError } = await supabase.from('producer_yields').insert(yieldsToInsert).select();
+        if (yieldError) throw yieldError;
+
+        // 3. Create a map of temp ID to new DB ID for yields
+        const yieldIdMap: { [key: string]: string } = {};
+        insertedYields.forEach((yieldRecord: any) => {
+            const original = dummyYields.find(dy => dy.commodityName === yieldRecord.commodityName);
+            if(original && original._id) {
+               yieldIdMap[original._id] = yieldRecord.id;
+            }
+        });
+        
+        // 4. Insert orders, linking to yields where applicable
+        const ordersToInsert = dummyOrders.map(o => ({
+            ...o,
+            user_id: currentUser.id,
+            buyerName: currentUser.email,
+            // Replace temporary yieldId with the new database ID
+            yieldId: o.yieldId ? yieldIdMap[o.yieldId] : undefined,
+            // Find the producer name from the original dummy yield
+            producerName: o.yieldId ? dummyYields.find(y => y._id === o.yieldId)?.producerName : undefined
+        }));
+        const { data: insertedOrders, error: orderError } = await supabase.from('buyer_orders').insert(ordersToInsert).select();
+        if (orderError) throw orderError;
+        
+        // 5. Create a map for order IDs
+        const orderIdMap: { [key: string]: string } = {};
+        insertedOrders.forEach((orderRecord: any) => {
+            const original = dummyOrders.find(o => o.commodityName === orderRecord.commodityName && o.quantity === orderRecord.quantity);
+            if(original && original._id) {
+                orderIdMap[original._id] = orderRecord.id;
+            }
+        });
+        
+        // 6. Insert transport bids, linking to orders
+        const bidsToInsert = dummyTransportBids.map(b => ({
+            ...b,
+            user_id: currentUser.id,
+            transporterName: currentUser.email,
+            orderId: b.orderId ? orderIdMap[b.orderId] : ''
+        })).filter(b => b.orderId); // Ensure we only insert valid bids
+        
+        if (bidsToInsert.length > 0) {
+            const { error: bidError } = await supabase.from('transport_bids').insert(bidsToInsert);
+            if (bidError) throw bidError;
+        }
+
+        // 7. Refresh data from DB
+        await fetchInitialData();
+
+    } catch (err: any) {
+        console.error("Error preloading data:", err);
+        setError("Failed to load sample data. Please try again.");
+    } finally {
+        setIsPreloading(false);
+    }
+  };
+
   // Filtering logic
   const filteredCommodities = useMemo(() => {
     if (!searchQuery) return commodities;
@@ -395,7 +466,12 @@ const App: React.FC = () => {
               </div>
               <div className="lg:col-span-2">
                 <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Live Buyer Orders & Offers</h2>
-                <OrderList orders={filteredOrders} searchQuery={searchQuery} />
+                <OrderList 
+                    orders={filteredOrders} 
+                    searchQuery={searchQuery}
+                    isPreloading={isPreloading}
+                    onPreloadData={handlePreloadData}
+                />
               </div>
             </div>
           )}
@@ -408,7 +484,14 @@ const App: React.FC = () => {
                 </div>
                 <div className="lg:col-span-2">
                   <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Producer Yield Postings</h2>
-                  <YieldList yields={filteredYields} orders={orders} onMakeOffer={handleOpenOfferModal} searchQuery={searchQuery} />
+                  <YieldList 
+                    yields={filteredYields} 
+                    orders={orders} 
+                    onMakeOffer={handleOpenOfferModal} 
+                    searchQuery={searchQuery}
+                    isPreloading={isPreloading}
+                    onPreloadData={handlePreloadData}
+                  />
                 </div>
               </div>
           )}

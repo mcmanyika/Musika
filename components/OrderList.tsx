@@ -1,9 +1,13 @@
+
 import React from 'react';
 import type { BuyerOrder } from '../types';
+import LoadingSpinner from './LoadingSpinner';
 
 interface OrderListProps {
   orders: BuyerOrder[];
   searchQuery: string;
+  isPreloading: boolean;
+  onPreloadData: () => void;
 }
 
 const formatPrice = (price: number) => {
@@ -66,7 +70,7 @@ const OrderItem: React.FC<{ order: BuyerOrder }> = ({ order }) => {
 };
 
 
-const OrderList: React.FC<OrderListProps> = ({ orders, searchQuery }) => {
+const OrderList: React.FC<OrderListProps> = ({ orders, searchQuery, isPreloading, onPreloadData }) => {
   if (orders.length === 0) {
     return (
       <div className="flex items-center justify-center h-full bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6 min-h-[200px]">
@@ -80,6 +84,17 @@ const OrderList: React.FC<OrderListProps> = ({ orders, searchQuery }) => {
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {searchQuery ? `Your search for "${searchQuery}" did not match any orders.` : 'Place an order or make an offer on a yield posting.'}
           </p>
+           {!searchQuery && (
+              <div className="mt-6">
+                <button
+                    onClick={onPreloadData}
+                    disabled={isPreloading}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50"
+                >
+                    {isPreloading ? <><LoadingSpinner /> <span className="ml-2">Loading...</span></> : 'Load Sample Market Data'}
+                </button>
+              </div>
+            )}
         </div>
       </div>
     );

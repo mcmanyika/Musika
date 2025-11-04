@@ -1,11 +1,15 @@
+
 import React, { useMemo } from 'react';
 import type { ProducerYield, BuyerOrder } from '../types';
+import LoadingSpinner from './LoadingSpinner';
 
 interface YieldListProps {
   yields: ProducerYield[];
   orders: BuyerOrder[];
   onMakeOffer: (yieldPost: ProducerYield) => void;
   searchQuery: string;
+  isPreloading: boolean;
+  onPreloadData: () => void;
 }
 
 const formatPrice = (price: number) => {
@@ -99,7 +103,7 @@ const YieldItem: React.FC<{ yieldPost: ProducerYield; orders: BuyerOrder[]; onMa
 };
 
 
-const YieldList: React.FC<YieldListProps> = ({ yields, orders, onMakeOffer, searchQuery }) => {
+const YieldList: React.FC<YieldListProps> = ({ yields, orders, onMakeOffer, searchQuery, isPreloading, onPreloadData }) => {
   if (yields.length === 0) {
     return (
       <div className="flex items-center justify-center h-full bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6 min-h-[200px]">
@@ -113,6 +117,17 @@ const YieldList: React.FC<YieldListProps> = ({ yields, orders, onMakeOffer, sear
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {searchQuery ? `Your search for "${searchQuery}" did not match any yields.` : 'Be the first to post an expected future supply.'}
           </p>
+          {!searchQuery && (
+              <div className="mt-6">
+                <button
+                    onClick={onPreloadData}
+                    disabled={isPreloading}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50"
+                >
+                    {isPreloading ? <><LoadingSpinner /> <span className="ml-2">Loading...</span></> : 'Load Sample Market Data'}
+                </button>
+              </div>
+          )}
         </div>
       </div>
     );

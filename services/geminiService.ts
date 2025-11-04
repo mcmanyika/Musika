@@ -51,17 +51,30 @@ const fetchCommodityPrices = async (): Promise<Commodity[]> => {
       },
     });
 
-    const jsonText = response.text.trim();
-    const data = JSON.parse(jsonText);
+    const jsonText = response.text?.trim();
+
+    if (!jsonText) {
+      console.error("Gemini API returned an empty response text.");
+      throw new Error("API returned an empty response.");
+    }
     
-    // Simple validation
+    let data;
+    try {
+        data = JSON.parse(jsonText);
+    } catch (parseError) {
+        console.error("Failed to parse JSON response from Gemini API:", parseError);
+        console.error("Raw response text:", jsonText);
+        throw new Error("API returned malformed data.");
+    }
+    
     if (!Array.isArray(data)) {
+        console.error("Parsed data is not an array:", data);
         throw new Error("API did not return an array");
     }
 
     return data as Commodity[];
   } catch (error) {
-    console.error("Error fetching or parsing commodity prices:", error);
+    console.error("Error fetching or parsing commodity prices from Gemini:", error);
     throw new Error("Failed to get valid data from Gemini API.");
   }
 };
