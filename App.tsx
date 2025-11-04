@@ -27,6 +27,7 @@ export type SortDirection = 'asc' | 'desc';
 
 const App: React.FC = () => {
   const [commodities, setCommodities] = useState<Commodity[]>([]);
+  // FIX: Corrected typo from Commodority to Commodity.
   const [selectedCommodity, setSelectedCommodity] = useState<Commodity | null>(null);
   const [orders, setOrders] = useState<BuyerOrder[]>([]);
   const [yields, setYields] = useState<ProducerYield[]>([]);
@@ -37,6 +38,7 @@ const App: React.FC = () => {
   const [offerModalYield, setOfferModalYield] = useState<ProducerYield | null>(null);
   const [bidModalDeal, setBidModalDeal] = useState<BuyerOrder | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isSessionLoading, setIsSessionLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'name', direction: 'asc' });
   const [theme, setTheme] = useState<Theme>(() => {
@@ -61,25 +63,24 @@ const App: React.FC = () => {
 
   // Supabase Auth Listener
   useEffect(() => {
-    // FIX: A type error on this line is likely a symptom of a broader type resolution issue.
-    // Defining the User type locally and using older auth methods should resolve this.
+    setIsSessionLoading(true);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        setCurrentUser(session?.user ?? null);
+        setIsSessionLoading(false);
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setCurrentUser(session?.user ?? null);
-      if (session?.user) {
-        setIsLoading(true);
-        loadCommodityData();
-        fetchInitialData();
-      } else {
-        setIsLoading(false);
-      }
+      setIsSessionLoading(false);
     });
 
     return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   // Supabase Real-time Subscriptions
   useEffect(() => {
+      if (!currentUser) return; // Don't subscribe if not logged in
+
       const yieldChannel = supabase.channel('public:producer_yields')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'producer_yields' }, () => fetchYields())
         .subscribe();
@@ -97,7 +98,7 @@ const App: React.FC = () => {
           supabase.removeChannel(orderChannel);
           supabase.removeChannel(bidChannel);
       };
-  }, []);
+  }, [currentUser]);
 
   const fetchYields = async () => {
       const { data, error } = await supabase.from('producer_yields').select('*').order('timestamp', { ascending: false });
@@ -115,13 +116,13 @@ const App: React.FC = () => {
       else setTransportBids(data || []);
   };
   
-  const fetchInitialData = async () => {
+  const fetchInitialData = useCallback(async () => {
       await Promise.all([
           fetchYields(),
           fetchOrders(),
           fetchTransportBids()
       ]);
-  }
+  }, [])
 
 
   const loadCommodityData = useCallback(async () => {
@@ -142,6 +143,14 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   }, []);
+
+  // Fetch data only when user is logged in
+  useEffect(() => {
+    if (currentUser) {
+      loadCommodityData();
+      fetchInitialData();
+    }
+  }, [currentUser, loadCommodityData, fetchInitialData]);
 
 
   const handleThemeToggle = () => {
@@ -447,11 +456,23 @@ const App: React.FC = () => {
     );
   };
 
+  if (isSessionLoading) {
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
+            <LoadingSpinner />
+        </div>
+    );
+  }
+
   return (
     <div className="min-h-screen text-slate-800 dark:text-slate-200">
       <Header currentUser={currentUser} onSignOut={handleSignOut} theme={theme} onThemeToggle={handleThemeToggle} />
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-        {!currentUser ? <AuthModal onSignIn={handleSignIn} /> : renderContent()}
+        {!currentUser ? (
+            <AuthModal onSignIn={handleSignIn} />
+        ) : (
+            renderContent()
+        )}
       </main>
       {currentUser && offerModalYield && (
         <OfferModal
