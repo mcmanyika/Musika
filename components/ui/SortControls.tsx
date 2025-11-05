@@ -26,7 +26,7 @@ const SortButton: React.FC<{
     return (
         <button
             onClick={onClick}
-            className={`flex-1 sm:px-4 py-2 text-sm font-medium rounded-md flex items-center justify-center space-x-2 transition-colors ${isActive ? activeClasses : inactiveClasses}`}
+            className={`sm:px-4 py-2 text-sm font-medium rounded-md flex items-center space-x-2 transition-colors ${isActive ? activeClasses : inactiveClasses} ${sortKey === 'price' ? 'justify-center' : sortKey === 'name' ? 'justify-start' : 'justify-end'}`}
             aria-label={`Sort by ${label} in ${isActive && direction === 'asc' ? 'descending' : 'ascending'} order`}
         >
             <span>{label}</span>
@@ -41,8 +41,7 @@ const SortButton: React.FC<{
 
 const SortControls: React.FC<SortControlsProps> = ({ sortConfig, onSort }) => {
     return (
-        <div className="flex items-center bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border-b border-slate-200 dark:border-slate-700 mb-2 flex-wrap sm:flex-nowrap">
-            <div className="flex-grow flex space-x-1">
+        <div className="grid grid-cols-3 gap-4 items-center bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border-b border-slate-200 dark:border-slate-700 mb-2">
                {sortOptions.map(option => (
                    <SortButton 
                        key={option.key}
@@ -53,7 +52,6 @@ const SortControls: React.FC<SortControlsProps> = ({ sortConfig, onSort }) => {
                        onClick={() => onSort(option.key)}
                    />
                ))}
-            </div>
         </div>
     );
 };

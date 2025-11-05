@@ -19,6 +19,7 @@ import TransportList from './components/lists/TransportList';
 import CommodityList from './components/lists/CommodityList';
 import CompactCommodityList from './components/lists/CompactCommodityList';
 import PriceChart from './components/charts/PriceChart';
+import PriceChartModal from './components/modals/PriceChartModal';
 import SearchInput from './components/ui/SearchInput';
 import SortControls from './components/ui/SortControls';
 import Pagination from './components/ui/Pagination';
@@ -67,6 +68,8 @@ const App: React.FC = () => {
   const [isTransporterDetailsModalOpen, setIsTransporterDetailsModalOpen] = useState<boolean>(false);
   const [selectedDealForBidsModal, setSelectedDealForBidsModal] = useState<BuyerOrder | null>(null);
   const [isViewBidsModalOpen, setIsViewBidsModalOpen] = useState<boolean>(false);
+  const [selectedCommodityForChart, setSelectedCommodityForChart] = useState<Commodity | null>(null);
+  const [isPriceChartModalOpen, setIsPriceChartModalOpen] = useState<boolean>(false);
   const [theme, setTheme] = useState<Theme>(() => {
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme === 'dark' || storedTheme === 'light') {
@@ -452,8 +455,207 @@ const App: React.FC = () => {
   // Track if we've loaded data for this user session
   const hasLoadedDataRef = useRef<string | null>(null);
 
+  const calculateCommodityPrices = async () => {
+    try {
+      // Fetch all accepted transactions (status != 'cancelled')
+      const { data: transactions, error: transError } = await supabase
+        .from('transaction_history')
+        .select('id, order_id, created_at')
+        .neq('status', 'cancelled');
+      
+      if (transError) {
+        console.error('Error fetching transactions:', transError);
+        return null;
+      }
+      
+      if (!transactions || transactions.length === 0) {
+        // No transactions yet, return base commodities list
+        const { data: commodities, error: commError } = await supabase
+          .from('commodities')
+          .select('id, name, unit')
+          .order('name', { ascending: true });
+        
+        if (commError) {
+          console.error('Error fetching commodities:', commError);
+          return null;
+        }
+        
+        return (commodities || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          unit: item.unit,
+          price: 0,
+          priceChange: 0,
+          history: [],
+        }));
+      }
+      
+      // Get all orders for these transactions
+      const orderIds = transactions.map(t => t.order_id);
+      const { data: orders, error: ordersError } = await supabase
+        .from('buyer_orders')
+        .select('id, commodityname, commodityunit, offerprice, quantity, created_at')
+        .in('id', orderIds);
+      
+      if (ordersError) {
+        console.error('Error fetching orders:', ordersError);
+        return null;
+      }
+      
+      // Create a map of order_id -> transaction
+      const transactionMap = new Map(transactions.map(t => [t.order_id, t]));
+      
+      // Group orders by commodity and date
+      const commodityDataMap = new Map<string, Map<string, { prices: number[]; quantity: number }>>();
+      
+      // Get all unique commodities from the database
+      const { data: commodities, error: commError } = await supabase
+        .from('commodities')
+        .select('id, name, unit')
+        .order('name', { ascending: true });
+      
+      if (commError) {
+        console.error('Error fetching commodities:', commError);
+        return null;
+      }
+      
+      // Initialize map with all commodities
+      const commodityMap = new Map<string, { id: string; name: string; unit: string }>();
+      (commodities || []).forEach((item: any) => {
+        commodityMap.set(item.name.toLowerCase(), { id: item.id, name: item.name, unit: item.unit });
+      });
+      
+      // Process orders and group by commodity and date
+      (orders || []).forEach((order: any) => {
+        const transaction = transactionMap.get(order.id);
+        if (!transaction) return;
+        
+        const commodityName = order.commodityname?.toLowerCase() || '';
+        if (!commodityMap.has(commodityName)) return;
+        
+        // Get date in YYYY-MM-DD format (date only, no time)
+        const orderDate = new Date(transaction.created_at || order.created_at).toISOString().split('T')[0];
+        
+        if (!commodityDataMap.has(commodityName)) {
+          commodityDataMap.set(commodityName, new Map());
+        }
+        
+        const dateMap = commodityDataMap.get(commodityName)!;
+        if (!dateMap.has(orderDate)) {
+          dateMap.set(orderDate, { prices: [], quantity: 0 });
+        }
+        
+        const dayData = dateMap.get(orderDate)!;
+        dayData.prices.push(parseFloat(order.offerprice) || 0);
+        dayData.quantity += parseFloat(order.quantity) || 0;
+      });
+      
+      // Calculate prices for each commodity
+      const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      // Generate last 7 days
+      const last7Days: string[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+        last7Days.push(date.toISOString().split('T')[0]);
+      }
+      
+      const result: Commodity[] = [];
+      
+      commodityMap.forEach((commodity, commodityNameKey) => {
+        const dateMap = commodityDataMap.get(commodityNameKey) || new Map();
+        
+        // Calculate average price for each day
+        const dailyPrices: { date: string; price: number }[] = [];
+        
+        last7Days.forEach(date => {
+          const dayData = dateMap.get(date);
+          if (dayData && dayData.prices.length > 0) {
+            // Calculate weighted average by quantity, or simple average if quantities are not reliable
+            const avgPrice = dayData.prices.reduce((sum, price) => sum + price, 0) / dayData.prices.length;
+            dailyPrices.push({ date, price: avgPrice });
+          }
+        });
+        
+        // Get today's price
+        const todayData = dateMap.get(today);
+        const currentPrice = todayData && todayData.prices.length > 0
+          ? todayData.prices.reduce((sum, price) => sum + price, 0) / todayData.prices.length
+          : (dailyPrices.length > 0 ? dailyPrices[dailyPrices.length - 1].price : 0);
+        
+        // Get yesterday's price
+        const yesterdayData = dateMap.get(yesterday);
+        const yesterdayPrice = yesterdayData && yesterdayData.prices.length > 0
+          ? yesterdayData.prices.reduce((sum, price) => sum + price, 0) / yesterdayData.prices.length
+          : (dailyPrices.length > 1 ? dailyPrices[dailyPrices.length - 2].price : currentPrice);
+        
+        // Calculate price change
+        const priceChange = currentPrice > 0 && yesterdayPrice > 0 
+          ? currentPrice - yesterdayPrice 
+          : 0;
+        
+        // Format history dates
+        const history = dailyPrices.map(dp => ({
+          date: new Date(dp.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          price: parseFloat(dp.price.toFixed(2))
+        }));
+        
+        // If no history, create empty history array
+        if (history.length === 0) {
+          for (let i = 6; i >= 0; i--) {
+            const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+            history.push({
+              date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              price: 0
+            });
+          }
+        }
+        
+        result.push({
+          id: commodity.id,
+          name: commodity.name,
+          unit: commodity.unit,
+          price: parseFloat(currentPrice.toFixed(2)) || 0,
+          priceChange: parseFloat(priceChange.toFixed(2)) || 0,
+          history: history.length > 0 ? history : []
+        });
+      });
+      
+      return result;
+    } catch (err) {
+      console.error('Error calculating commodity prices:', err);
+      // Fallback to fetching from commodities table
+      const { data, error } = await supabase
+        .from('commodities')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching commodities:', error);
+        return null;
+      }
+      
+      return (data || []).map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        unit: item.unit,
+        price: parseFloat(item.price) || 0,
+        priceChange: parseFloat(item.pricechange) || 0,
+        history: item.history || [],
+      }));
+    }
+  };
+
   const fetchCommodities = async () => {
-    // Fetch commodities from Supabase instead of Gemini API
+    // Calculate prices from accepted bids instead of static values
+    const calculatedData = await calculateCommodityPrices();
+    
+    if (calculatedData) {
+      return calculatedData;
+    }
+    
+    // Fallback to static data if calculation fails
     const { data, error } = await supabase
       .from('commodities')
       .select('*')
@@ -499,6 +701,15 @@ const App: React.FC = () => {
       }
     }
   }, [commodities.length]);
+
+  // Recalculate commodity prices when transactions change
+  useEffect(() => {
+    if (currentUser && transactions.length > 0) {
+      // Refresh commodity prices when transactions are updated
+      loadCommodityData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions.length]);
 
   // Fetch data only when user is logged in and hasn't loaded yet
   useEffect(() => {
@@ -547,6 +758,16 @@ const App: React.FC = () => {
 
   const handleSelectCommodity = (commodity: Commodity) => {
     setSelectedCommodity(commodity);
+  };
+
+  const handleViewPriceChart = (commodity: Commodity) => {
+    setSelectedCommodityForChart(commodity);
+    setIsPriceChartModalOpen(true);
+  };
+
+  const handleClosePriceChartModal = () => {
+    setIsPriceChartModalOpen(false);
+    setSelectedCommodityForChart(null);
   };
 
   const handleAddOrder = async (order: Omit<BuyerOrder, 'id' | 'timestamp' | 'buyerName' | 'user_id'>) => {
@@ -790,6 +1011,71 @@ const App: React.FC = () => {
   const handleCloseViewBidsModal = () => {
     setIsViewBidsModalOpen(false);
     setSelectedDealForBidsModal(null);
+  }
+
+  const handleAcceptOffer = async (order: BuyerOrder) => {
+    if (!currentUser) return;
+
+    try {
+      if (!order.yieldId) {
+        throw new Error('Order does not have an associated yield');
+      }
+
+      const yieldPost = yields.find(y => y.id === order.yieldId);
+      if (!yieldPost) {
+        throw new Error('Yield post not found');
+      }
+
+      // Check if current user is the seller (producer)
+      if (yieldPost.user_id !== currentUser.id) {
+        throw new Error('Only the seller can accept offers');
+      }
+
+      // Check if transaction already exists for this yield (only one active transaction per yield)
+      const { data: existingTransaction } = await supabase
+        .from('transaction_history')
+        .select('id, order_id')
+        .eq('yield_id', yieldPost.id)
+        .neq('status', 'cancelled')
+        .maybeSingle();
+
+      if (existingTransaction) {
+        if (existingTransaction.order_id === order.id) {
+          // This offer is already accepted
+          throw new Error('This offer has already been accepted');
+        } else {
+          // Another offer was already accepted for this yield
+          throw new Error('Another offer has already been accepted for this yield');
+        }
+      }
+
+      // Create new transaction with accepted offer
+      const insertData: any = {
+        order_id: order.id,
+        yield_id: yieldPost.id,
+        buyer_id: order.user_id,
+        seller_id: yieldPost.user_id,
+        status: 'pending',
+      };
+
+      const { error: insertError } = await supabase
+        .from('transaction_history')
+        .insert(insertData);
+
+      if (insertError) {
+        throw new Error(`Failed to accept offer: ${insertError.message}`);
+      }
+
+      // Refresh transactions and orders to show updated state
+      await Promise.all([
+        fetchTransactions(),
+        fetchOrders()
+      ]);
+      setError(null);
+    } catch (err: any) {
+      console.error('Error accepting offer:', err);
+      setError(err.message || 'Failed to accept offer. Please try again.');
+    }
   }
 
   const handleAcceptTransportBid = async (bid: TransportBid) => {
@@ -1202,7 +1488,7 @@ const App: React.FC = () => {
                   <YieldForm commodities={commodities} onAddYield={handleAddYield} />
                 </div>
                 <div className="lg:col-span-2">
-                  <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Producer Yield Postings</h2>
+                  <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Producer Yield Listings</h2>
                   <YieldList 
                     yields={paginatedYields} 
                     orders={orders} 
@@ -1244,11 +1530,12 @@ const App: React.FC = () => {
                     commodities={sortedAndFilteredCommodities}
                     selectedCommodityId={selectedCommodity?.id}
                     onSelectCommodity={handleSelectCommodity}
+                    onViewChart={handleViewPriceChart}
                     searchQuery={searchQuery}
                     sortConfig={sortConfig}
                     onSort={handleSortRequest}
                   />
-                  {selectedCommodity && <PriceChart commodity={selectedCommodity} theme={theme} />}
+
                 </div>
               </div>
            </div>
@@ -1299,6 +1586,8 @@ const App: React.FC = () => {
                 itemsPerPage={itemsPerPage}
                 onMakeOffer={handleOpenOfferModal}
                 onUpdateYield={handleUpdateYield}
+                onAcceptOffer={handleAcceptOffer}
+                transactions={transactions}
               />
             </div>
           )}
@@ -1421,6 +1710,14 @@ const App: React.FC = () => {
           }}
           currentUserId={currentUser?.id}
           transactions={transactions}
+        />
+      )}
+      {selectedCommodityForChart && (
+        <PriceChartModal
+          commodity={selectedCommodityForChart}
+          theme={theme}
+          isOpen={isPriceChartModalOpen}
+          onClose={handleClosePriceChartModal}
         />
       )}
     </div>

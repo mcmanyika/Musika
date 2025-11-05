@@ -8,6 +8,7 @@ interface CommodityListProps {
   commodities: Commodity[];
   selectedCommodityId?: string | null;
   onSelectCommodity: (commodity: Commodity) => void;
+  onViewChart?: (commodity: Commodity) => void;
   searchQuery: string;
   sortConfig: { key: SortKey, direction: SortDirection };
   onSort: (key: SortKey) => void;
@@ -24,7 +25,8 @@ const CommodityListItem: React.FC<{
     commodity: Commodity;
     isSelected: boolean;
     onSelect: () => void;
-}> = ({ commodity, isSelected, onSelect }) => {
+    onViewChart?: () => void;
+}> = ({ commodity, isSelected, onSelect, onViewChart }) => {
     const isPositive = commodity.priceChange > 0;
     const isNegative = commodity.priceChange < 0;
 
@@ -32,30 +34,40 @@ const CommodityListItem: React.FC<{
     const bgColor = isSelected ? 'bg-emerald-50 dark:bg-emerald-900/50' : 'bg-white dark:bg-slate-800';
     const ringColor = isSelected ? 'ring-2 ring-emerald-500' : 'ring-1 ring-slate-200 dark:ring-slate-700';
 
+    const handleClick = () => {
+        onSelect();
+        if (onViewChart) {
+            onViewChart();
+        }
+    };
+
     return (
         <li
-            onClick={onSelect}
-            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-200 ease-in-out ${bgColor} ${ringColor} hover:shadow-md hover:ring-emerald-400 dark:hover:ring-emerald-600`}
+            onClick={handleClick}
+            className={`grid grid-cols-3 gap-4 items-center p-3 rounded-lg cursor-pointer transition-all duration-200 ease-in-out ${bgColor} ${ringColor} hover:shadow-md hover:ring-emerald-400 dark:hover:ring-emerald-600`}
         >
             <div>
                 <p className="font-semibold text-slate-800 dark:text-slate-100">{commodity.name}</p>
                 <p className="text-sm text-slate-500 dark:text-slate-400">per {commodity.unit}</p>
             </div>
-            <div className="text-right flex items-center space-x-2">
+            <div className="text-center">
                 <span className="font-semibold text-slate-900 dark:text-slate-50">{formatPrice(commodity.price)}</span>
+            </div>
+            <div className="text-right flex items-center justify-end space-x-2">
                 <span className={`flex items-center text-sm font-medium ${trendColor}`}>
                     {isPositive && <ArrowUpIcon />}
                     {isNegative && <ArrowDownIcon />}
                     {!isPositive && !isNegative && <MinusIcon />}
                     <span>{Math.abs(commodity.priceChange).toFixed(2)}</span>
                 </span>
+
             </div>
         </li>
     );
 };
 
 
-const CommodityList: React.FC<CommodityListProps> = ({ commodities, selectedCommodityId, onSelectCommodity, searchQuery, sortConfig, onSort }) => {
+const CommodityList: React.FC<CommodityListProps> = ({ commodities, selectedCommodityId, onSelectCommodity, onViewChart, searchQuery, sortConfig, onSort }) => {
   if (searchQuery && commodities.length === 0) {
     return (
       <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 text-center py-10">
@@ -76,6 +88,7 @@ const CommodityList: React.FC<CommodityListProps> = ({ commodities, selectedComm
                     commodity={commodity}
                     isSelected={commodity.id === selectedCommodityId}
                     onSelect={() => onSelectCommodity(commodity)}
+                    onViewChart={onViewChart ? () => onViewChart(commodity) : undefined}
                 />
             ))}
         </ul>

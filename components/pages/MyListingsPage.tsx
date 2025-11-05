@@ -7,6 +7,7 @@ import StarRating from '../ui/StarRating';
 import EditYieldModal from '../modals/EditYieldModal';
 import BuyerDetailsModal from '../modals/BuyerDetailsModal';
 import TransporterDetailsModal from '../modals/TransporterDetailsModal';
+import ViewOffersModal from '../modals/ViewOffersModal';
 
 const formatPrice = (price: number) => {
   return new Intl.NumberFormat('en-US', {
@@ -111,16 +112,19 @@ interface MyYieldListProps {
   currentUserId: string;
   userRatingStatsMap?: Record<string, UserRatingStats>;
   onEdit: (yieldPost: ProducerYield) => void;
+  onViewOffers?: (yieldPost: ProducerYield) => void;
+  transactions?: any[];
 }
 
-const MyYieldList: React.FC<MyYieldListProps> = ({ yields, orders, currentUserId, userRatingStatsMap, onEdit }) => {
+const MyYieldList: React.FC<MyYieldListProps> = ({ yields, orders, currentUserId, userRatingStatsMap, onEdit, onViewOffers, transactions }) => {
   const MyYieldItem: React.FC<{ yieldPost: ProducerYield; orders: BuyerOrder[] }> = ({ yieldPost, orders }) => {
-    const { offerCount, highestOffer } = useMemo(() => {
+    const { offerCount, highestOffer, hasAcceptedOffer } = useMemo(() => {
       const relevantOffers = orders.filter(o => o.yieldId === yieldPost.id);
       const count = relevantOffers.length;
       const highest = relevantOffers.reduce((max, order) => order.offerPrice > max ? order.offerPrice : max, 0);
-      return { offerCount: count, highestOffer: highest };
-    }, [orders, yieldPost.id]);
+      const accepted = transactions?.some(t => t.yield_id === yieldPost.id && t.status !== 'cancelled');
+      return { offerCount: count, highestOffer: highest, hasAcceptedOffer: accepted };
+    }, [orders, yieldPost.id, transactions]);
 
     return (
       <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-shadow hover:shadow-md flex flex-col sm:flex-row sm:space-x-4">
@@ -169,12 +173,27 @@ const MyYieldList: React.FC<MyYieldListProps> = ({ yields, orders, currentUserId
                 </p>
               )}
             </div>
-            <button
-              onClick={() => onEdit(yieldPost)}
-              className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
-            >
-              Edit
-            </button>
+            <div className="flex gap-2 items-center">
+              {offerCount > 0 && onViewOffers && (
+                <button
+                  onClick={() => onViewOffers(yieldPost)}
+                  className="px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-md transition-colors"
+                >
+                  View Offers ({offerCount})
+                </button>
+              )}
+              {hasAcceptedOffer && (
+                <div className="px-3 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-md">
+                  Offer Accepted
+                </div>
+              )}
+              <button
+                onClick={() => onEdit(yieldPost)}
+                className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
+              >
+                Edit
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -266,6 +285,8 @@ interface MyListingsPageProps {
   itemsPerPage?: number;
   onMakeOffer?: (yieldPost: ProducerYield) => void;
   onUpdateYield: (id: string, yieldPost: Omit<ProducerYield, 'id' | 'timestamp' | 'producerName' | 'user_id'>) => Promise<void>;
+  onAcceptOffer?: (order: BuyerOrder) => void;
+  transactions?: any[];
 }
 
 type ListingTab = 'yields' | 'orders' | 'transport';
@@ -280,6 +301,8 @@ const MyListingsPage: React.FC<MyListingsPageProps> = ({
   itemsPerPage = 10,
   onMakeOffer,
   onUpdateYield,
+  onAcceptOffer,
+  transactions,
 }) => {
   const [activeTab, setActiveTab] = useState<ListingTab>('yields');
   const [yieldsPage, setYieldsPage] = useState<number>(1);
@@ -291,6 +314,8 @@ const MyListingsPage: React.FC<MyListingsPageProps> = ({
   const [isBuyerDetailsModalOpen, setIsBuyerDetailsModalOpen] = useState<boolean>(false);
   const [selectedTransportBid, setSelectedTransportBid] = useState<TransportBid | null>(null);
   const [isTransporterDetailsModalOpen, setIsTransporterDetailsModalOpen] = useState<boolean>(false);
+  const [selectedYieldForOffers, setSelectedYieldForOffers] = useState<ProducerYield | null>(null);
+  const [isViewOffersModalOpen, setIsViewOffersModalOpen] = useState<boolean>(false);
 
   // Filter listings to only show those posted by the current user
   const myYields = yields.filter(y => y.user_id === currentUserId);
@@ -385,6 +410,11 @@ const MyListingsPage: React.FC<MyListingsPageProps> = ({
                     setEditingYield(yieldPost);
                     setIsEditModalOpen(true);
                   }}
+                  onViewOffers={(yieldPost) => {
+                    setSelectedYieldForOffers(yieldPost);
+                    setIsViewOffersModalOpen(true);
+                  }}
+                  transactions={transactions}
                 />
                 {myYields.length > 0 && (
                   <Pagination
@@ -524,6 +554,34 @@ const MyListingsPage: React.FC<MyListingsPageProps> = ({
             setSelectedTransportBid(null);
           }}
           userRatingStats={selectedTransportBid.user_id ? userRatingStatsMap?.[selectedTransportBid.user_id] : undefined}
+        />
+      )}
+
+      {/* View Offers Modal */}
+      {selectedYieldForOffers && (
+        <ViewOffersModal
+          yieldPost={selectedYieldForOffers}
+          offers={orders}
+          userRatingStatsMap={userRatingStatsMap}
+          isOpen={isViewOffersModalOpen}
+          onClose={() => {
+            setIsViewOffersModalOpen(false);
+            setSelectedYieldForOffers(null);
+          }}
+          onViewBuyer={(order) => {
+            setIsViewOffersModalOpen(false);
+            setSelectedOrder(order);
+            setIsBuyerDetailsModalOpen(true);
+          }}
+          onAcceptOffer={async (order) => {
+            if (onAcceptOffer) {
+              await onAcceptOffer(order);
+              // Optionally close the modal after accepting
+              // setIsViewOffersModalOpen(false);
+            }
+          }}
+          currentUserId={currentUserId}
+          transactions={transactions}
         />
       )}
     </div>
