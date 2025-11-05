@@ -27,6 +27,7 @@ import MyTransactionsPage from './components/pages/MyTransactionsPage';
 import MyListingsPage from './components/pages/MyListingsPage';
 import RatingModal from './components/modals/RatingModal';
 import TransporterDetailsModal from './components/modals/TransporterDetailsModal';
+import ViewBidsModal from './components/modals/ViewBidsModal';
 
 
 type Tab = 'orders' | 'yields' | 'prices' | 'transport' | 'transactions' | 'listings';
@@ -64,6 +65,8 @@ const App: React.FC = () => {
   const [ratingModalType, setRatingModalType] = useState<'buyer_to_seller' | 'seller_to_buyer' | null>(null);
   const [selectedTransportBidForModal, setSelectedTransportBidForModal] = useState<TransportBid | null>(null);
   const [isTransporterDetailsModalOpen, setIsTransporterDetailsModalOpen] = useState<boolean>(false);
+  const [selectedDealForBidsModal, setSelectedDealForBidsModal] = useState<BuyerOrder | null>(null);
+  const [isViewBidsModalOpen, setIsViewBidsModalOpen] = useState<boolean>(false);
   const [theme, setTheme] = useState<Theme>(() => {
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme === 'dark' || storedTheme === 'light') {
@@ -779,6 +782,16 @@ const App: React.FC = () => {
     setBidModalDeal(null);
   }
 
+  const handleViewBids = (deal: BuyerOrder) => {
+    setSelectedDealForBidsModal(deal);
+    setIsViewBidsModalOpen(true);
+  }
+
+  const handleCloseViewBidsModal = () => {
+    setIsViewBidsModalOpen(false);
+    setSelectedDealForBidsModal(null);
+  }
+
   const handleAcceptTransportBid = async (bid: TransportBid) => {
     if (!currentUser) return;
 
@@ -1248,6 +1261,7 @@ const App: React.FC = () => {
                   deals={paginatedDeals}
                   bids={transportBids}
                   onPlaceBid={handleOpenBidModal}
+                  onViewBids={handleViewBids}
                   searchQuery={searchQuery}
                   yields={yields}
                   userRatingStatsMap={userRatingStatsMap}
@@ -1385,6 +1399,28 @@ const App: React.FC = () => {
             setSelectedTransportBidForModal(null);
           }}
           userRatingStats={selectedTransportBidForModal.user_id ? userRatingStatsMap?.[selectedTransportBidForModal.user_id] : undefined}
+        />
+      )}
+      {selectedDealForBidsModal && (
+        <ViewBidsModal
+          deal={selectedDealForBidsModal}
+          bids={transportBids}
+          yields={yields}
+          userRatingStatsMap={userRatingStatsMap}
+          isOpen={isViewBidsModalOpen}
+          onClose={handleCloseViewBidsModal}
+          onViewTransporter={(bid) => {
+            setIsViewBidsModalOpen(false);
+            setSelectedTransportBidForModal(bid);
+            setIsTransporterDetailsModalOpen(true);
+          }}
+          onAcceptBid={async (bid) => {
+            await handleAcceptTransportBid(bid);
+            // Optionally close the view bids modal after accepting
+            // handleCloseViewBidsModal();
+          }}
+          currentUserId={currentUser?.id}
+          transactions={transactions}
         />
       )}
     </div>
