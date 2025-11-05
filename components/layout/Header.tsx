@@ -41,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, userProfile, onSign
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
         <div>
             <h1 className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-            Musika
+            MUSIKA
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-1">
             From Farm To Market, Simplified.

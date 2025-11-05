@@ -1185,7 +1185,7 @@ const App: React.FC = () => {
           {activeTab === 'yields' && (
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-1">
-                  <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Post an Expected Yield</h2>
+                  <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Expected Yield</h2>
                   <YieldForm commodities={commodities} onAddYield={handleAddYield} />
                 </div>
                 <div className="lg:col-span-2">
