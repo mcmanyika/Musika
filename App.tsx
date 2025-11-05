@@ -26,6 +26,7 @@ import ProfilePage from './components/pages/ProfilePage';
 import MyTransactionsPage from './components/pages/MyTransactionsPage';
 import MyListingsPage from './components/pages/MyListingsPage';
 import RatingModal from './components/modals/RatingModal';
+import TransporterDetailsModal from './components/modals/TransporterDetailsModal';
 
 
 type Tab = 'orders' | 'yields' | 'prices' | 'transport' | 'transactions' | 'listings';
@@ -61,6 +62,8 @@ const App: React.FC = () => {
   const [ratingModalOpen, setRatingModalOpen] = useState<boolean>(false);
   const [ratingModalTransaction, setRatingModalTransaction] = useState<TransactionHistory | null>(null);
   const [ratingModalType, setRatingModalType] = useState<'buyer_to_seller' | 'seller_to_buyer' | null>(null);
+  const [selectedTransportBidForModal, setSelectedTransportBidForModal] = useState<TransportBid | null>(null);
+  const [isTransporterDetailsModalOpen, setIsTransporterDetailsModalOpen] = useState<boolean>(false);
   const [theme, setTheme] = useState<Theme>(() => {
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme === 'dark' || storedTheme === 'light') {
@@ -776,6 +779,90 @@ const App: React.FC = () => {
     setBidModalDeal(null);
   }
 
+  const handleAcceptTransportBid = async (bid: TransportBid) => {
+    if (!currentUser) return;
+
+    try {
+      // Find the order and yield for this bid
+      const order = orders.find(o => o.id === bid.orderId);
+      if (!order || !order.yieldId) {
+        throw new Error('Order or yield not found');
+      }
+
+      const yieldPost = yields.find(y => y.id === order.yieldId);
+      if (!yieldPost) {
+        throw new Error('Yield post not found');
+      }
+
+      // Check if current user is the seller (producer)
+      if (yieldPost.user_id !== currentUser.id) {
+        throw new Error('Only the seller can accept transport bids');
+      }
+
+      // Check if transaction already exists for this order
+      // Try both snake_case and camelCase column names
+      const { data: existingTransaction } = await supabase
+        .from('transaction_history')
+        .select('id, transport_bid_id')
+        .eq('order_id', order.id)
+        .maybeSingle();
+
+      if (existingTransaction) {
+        // Update existing transaction with the accepted bid
+        const updateData: any = {
+          status: 'pending',
+        };
+        
+        // Use the correct column name based on database schema
+        if (existingTransaction.transport_bid_id !== undefined) {
+          updateData.transport_bid_id = bid.id;
+        } else {
+          // Try alternative column name
+          updateData.transportbidid = bid.id;
+        }
+        
+        const { error: updateError } = await supabase
+          .from('transaction_history')
+          .update(updateData)
+          .eq('id', existingTransaction.id);
+
+        if (updateError) {
+          throw new Error(`Failed to accept bid: ${updateError.message}`);
+        }
+      } else {
+        // Create new transaction with accepted bid
+        // Use snake_case column names as per database schema
+        const insertData: any = {
+          order_id: order.id,
+          yield_id: yieldPost.id,
+          buyer_id: order.user_id,
+          seller_id: yieldPost.user_id,
+          transport_bid_id: bid.id,
+          status: 'pending',
+        };
+
+        const { error: insertError } = await supabase
+          .from('transaction_history')
+          .insert(insertData);
+
+        if (insertError) {
+          throw new Error(`Failed to accept bid: ${insertError.message}`);
+        }
+      }
+
+      // Refresh transactions and transport bids to show updated state
+      await Promise.all([
+        fetchTransactions(),
+        fetchTransportBids()
+      ]);
+      setError(null);
+      // Optionally show a success notification
+    } catch (err: any) {
+      console.error('Error accepting transport bid:', err);
+      setError(err.message || 'Failed to accept transport bid. Please try again.');
+    }
+  }
+
   const handleSignIn = async (email: string) => {
     // FIX: Add `emailRedirectTo` to ensure the magic link returns to the correct application URL,
     // not the default localhost:3000.
@@ -1164,6 +1251,13 @@ const App: React.FC = () => {
                   searchQuery={searchQuery}
                   yields={yields}
                   userRatingStatsMap={userRatingStatsMap}
+                  onViewTransporter={(bid) => {
+                    setSelectedTransportBidForModal(bid);
+                    setIsTransporterDetailsModalOpen(true);
+                  }}
+                  onAcceptBid={handleAcceptTransportBid}
+                  currentUserId={currentUser?.id}
+                  transactions={transactions}
                />
                {filteredDeals.length > 0 && (
                  <div className="mt-4">
@@ -1280,6 +1374,17 @@ const App: React.FC = () => {
                  r.rater_id === currentUser.id &&
                  r.rating_type === ratingModalType
           ) || null}
+        />
+      )}
+      {selectedTransportBidForModal && (
+        <TransporterDetailsModal
+          transportBid={selectedTransportBidForModal}
+          isOpen={isTransporterDetailsModalOpen}
+          onClose={() => {
+            setIsTransporterDetailsModalOpen(false);
+            setSelectedTransportBidForModal(null);
+          }}
+          userRatingStats={selectedTransportBidForModal.user_id ? userRatingStatsMap?.[selectedTransportBidForModal.user_id] : undefined}
         />
       )}
     </div>

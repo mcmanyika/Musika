@@ -6,6 +6,7 @@ import Pagination from '../ui/Pagination';
 import StarRating from '../ui/StarRating';
 import EditYieldModal from '../modals/EditYieldModal';
 import BuyerDetailsModal from '../modals/BuyerDetailsModal';
+import TransporterDetailsModal from '../modals/TransporterDetailsModal';
 
 const formatPrice = (price: number) => {
   return new Intl.NumberFormat('en-US', {
@@ -40,6 +41,7 @@ interface TransportBidListProps {
   orders: BuyerOrder[];
   yields?: ProducerYield[];
   userRatingStatsMap?: Record<string, UserRatingStats>;
+  onTransporterClick?: (bid: TransportBid) => void;
 }
 
 interface MyOrderListProps {
@@ -188,7 +190,7 @@ const MyYieldList: React.FC<MyYieldListProps> = ({ yields, orders, currentUserId
   );
 };
 
-const TransportBidList: React.FC<TransportBidListProps> = ({ bids, orders, yields, userRatingStatsMap }) => {
+const TransportBidList: React.FC<TransportBidListProps> = ({ bids, orders, yields, userRatingStatsMap, onTransporterClick }) => {
   return (
     <div className="space-y-3">
       {bids.map(bid => {
@@ -198,7 +200,11 @@ const TransportBidList: React.FC<TransportBidListProps> = ({ bids, orders, yield
         const yieldPost = order.yieldId ? yields?.find(y => y.id === order.yieldId) : null;
 
         return (
-          <div key={bid.id} className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-shadow hover:shadow-md">
+          <div 
+            key={bid.id} 
+            onClick={() => onTransporterClick?.(bid)}
+            className={`bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-all ${onTransporterClick ? 'cursor-pointer hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-600' : 'hover:shadow-md'}`}
+          >
             <div className="flex justify-between items-start">
               <div>
                 <h4 className="font-bold text-lg text-slate-800 dark:text-slate-100">{order.commodityName}</h4>
@@ -283,6 +289,8 @@ const MyListingsPage: React.FC<MyListingsPageProps> = ({
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [selectedOrder, setSelectedOrder] = useState<BuyerOrder | null>(null);
   const [isBuyerDetailsModalOpen, setIsBuyerDetailsModalOpen] = useState<boolean>(false);
+  const [selectedTransportBid, setSelectedTransportBid] = useState<TransportBid | null>(null);
+  const [isTransporterDetailsModalOpen, setIsTransporterDetailsModalOpen] = useState<boolean>(false);
 
   // Filter listings to only show those posted by the current user
   const myYields = yields.filter(y => y.user_id === currentUserId);
@@ -455,6 +463,10 @@ const MyListingsPage: React.FC<MyListingsPageProps> = ({
                   orders={orders}
                   yields={yields}
                   userRatingStatsMap={userRatingStatsMap}
+                  onTransporterClick={(bid) => {
+                    setSelectedTransportBid(bid);
+                    setIsTransporterDetailsModalOpen(true);
+                  }}
                 />
                 {myTransportBids.length > 0 && (
                   <Pagination
@@ -499,6 +511,19 @@ const MyListingsPage: React.FC<MyListingsPageProps> = ({
             setSelectedOrder(null);
           }}
           userRatingStats={selectedOrder.user_id ? userRatingStatsMap?.[selectedOrder.user_id] : undefined}
+        />
+      )}
+
+      {/* Transporter Details Modal */}
+      {selectedTransportBid && (
+        <TransporterDetailsModal
+          transportBid={selectedTransportBid}
+          isOpen={isTransporterDetailsModalOpen}
+          onClose={() => {
+            setIsTransporterDetailsModalOpen(false);
+            setSelectedTransportBid(null);
+          }}
+          userRatingStats={selectedTransportBid.user_id ? userRatingStatsMap?.[selectedTransportBid.user_id] : undefined}
         />
       )}
     </div>

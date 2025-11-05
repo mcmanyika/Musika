@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { BuyerOrder, TransportBid, UserRatingStats, ProducerYield } from '../../types';
 import StarRating from '../ui/StarRating';
 
@@ -9,6 +9,10 @@ interface TransportListProps {
   searchQuery: string;
   yields?: ProducerYield[];
   userRatingStatsMap?: Record<string, UserRatingStats>;
+  onViewTransporter?: (bid: TransportBid) => void;
+  onAcceptBid?: (bid: TransportBid) => void;
+  currentUserId?: string;
+  transactions?: any[];
 }
 
 const formatPrice = (price: number) => {
@@ -24,13 +28,32 @@ const DealItem: React.FC<{
   onPlaceBid: (deal: BuyerOrder) => void;
   yields?: ProducerYield[];
   userRatingStatsMap?: Record<string, UserRatingStats>;
-}> = ({ deal, bids, onPlaceBid, yields, userRatingStatsMap }) => {
-    const { bidCount, lowestBid } = useMemo(() => {
-        const relevantBids = bids.filter(b => b.orderId === deal.id);
-        const count = relevantBids.length;
-        const lowest = relevantBids.reduce((min, bid) => bid.bidAmount < min ? bid.bidAmount : min, Infinity);
-        return { bidCount: count, lowestBid: lowest === Infinity ? 0 : lowest };
+  onViewTransporter?: (bid: TransportBid) => void;
+  onAcceptBid?: (bid: TransportBid) => void;
+  currentUserId?: string;
+  transactions?: any[];
+}> = ({ deal, bids, onPlaceBid, yields, userRatingStatsMap, onViewTransporter, onAcceptBid, currentUserId, transactions }) => {
+    const [showBids, setShowBids] = useState<boolean>(false);
+    
+    const { bidCount, lowestBid, relevantBids } = useMemo(() => {
+        const filteredBids = bids.filter(b => b.orderId === deal.id);
+        const count = filteredBids.length;
+        const lowest = filteredBids.reduce((min, bid) => bid.bidAmount < min ? bid.bidAmount : min, Infinity);
+        return { 
+            bidCount: count, 
+            lowestBid: lowest === Infinity ? 0 : lowest,
+            relevantBids: filteredBids
+        };
     }, [bids, deal.id]);
+    
+    // Check if current user is the seller (producer) for this deal
+    const isSeller = deal.yieldId && yields && yields.some(y => y.id === deal.yieldId && y.user_id === currentUserId);
+    
+    // Check which bid is accepted (if any) for this order
+    const acceptedTransaction = transactions?.find(t => t.order_id === deal.id && t.transport_bid_id);
+    
+    // Check if any bid has been accepted for this deal (to prevent more bids)
+    const hasAcceptedBid = !!acceptedTransaction;
 
     return (
         <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-shadow hover:shadow-md">
@@ -71,30 +94,106 @@ const DealItem: React.FC<{
                     )}
                 </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex justify-between items-center">
-                <div className="text-sm">
-                    <p className="dark:text-slate-200">
-                        <span className="font-semibold text-emerald-700 dark:text-emerald-400">{bidCount}</span> Transport {bidCount === 1 ? 'Bid' : 'Bids'}
-                    </p>
-                    {lowestBid > 0 && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Lowest: <span className="font-bold">{formatPrice(lowestBid)}</span>
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                <div className="flex justify-between items-center mb-2">
+                    <div className="text-sm">
+                        <p className="dark:text-slate-200">
+                            <span className="font-semibold text-emerald-700 dark:text-emerald-400">{bidCount}</span> Transport {bidCount === 1 ? 'Bid' : 'Bids'}
                         </p>
-                    )}
+                        {lowestBid > 0 && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                Lowest: <span className="font-bold">{formatPrice(lowestBid)}</span>
+                            </p>
+                        )}
+                    </div>
+                    <div className="flex gap-2 items-center">
+                        {isSeller && bidCount > 0 && (
+                            <button
+                                onClick={() => setShowBids(!showBids)}
+                                className="px-3 py-1 text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-md transition-colors"
+                            >
+                                {showBids ? 'Hide' : 'View'} Bids
+                            </button>
+                        )}
+                        {hasAcceptedBid ? (
+                            <div className="px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-md">
+                                Bid Accepted
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => onPlaceBid(deal)}
+                                className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
+                            >
+                                Place Bid
+                            </button>
+                        )}
+                    </div>
                 </div>
-                <button
-                    onClick={() => onPlaceBid(deal)}
-                    className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
-                >
-                    Place Bid
-                </button>
+                {isSeller && showBids && relevantBids.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                        {relevantBids.map(bid => {
+                            const isAccepted = acceptedTransaction?.transport_bid_id === bid.id;
+                            return (
+                                <div
+                                    key={bid.id}
+                                    className={`p-3 rounded-md border ${
+                                        isAccepted 
+                                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' 
+                                            : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50'
+                                    } transition-all`}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex-1" onClick={() => onViewTransporter?.(bid)} style={{ cursor: onViewTransporter ? 'pointer' : 'default' }}>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                                                    {bid.transporterName}
+                                                </p>
+                                                {isAccepted && (
+                                                    <span className="px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 rounded-full">
+                                                        Accepted
+                                                    </span>
+                                                )}
+                                                {userRatingStatsMap && (
+                                                    <StarRating
+                                                        rating={userRatingStatsMap[bid.user_id]?.average_overall || 0}
+                                                        size="sm"
+                                                        readOnly
+                                                    />
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                                Est. Delivery: {new Date(bid.estimatedDeliveryDate).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                                                {formatPrice(bid.bidAmount)}
+                                            </p>
+                                            {isSeller && onAcceptBid && !isAccepted && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onAcceptBid(bid);
+                                                    }}
+                                                    className="px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                                                >
+                                                    Accept
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </div>
     );
 };
 
 
-const TransportList: React.FC<TransportListProps> = ({ deals, bids, onPlaceBid, searchQuery, yields, userRatingStatsMap }) => {
+const TransportList: React.FC<TransportListProps> = ({ deals, bids, onPlaceBid, searchQuery, yields, userRatingStatsMap, onViewTransporter, onAcceptBid, currentUserId, transactions }) => {
   if (deals.length === 0) {
     return (
       <div className="flex items-center justify-center h-full bg-slate-50 dark:bg-slate-800/50 rounded-lg p-6 min-h-[300px]">
@@ -123,6 +222,10 @@ const TransportList: React.FC<TransportListProps> = ({ deals, bids, onPlaceBid, 
                 onPlaceBid={onPlaceBid}
                 yields={yields}
                 userRatingStatsMap={userRatingStatsMap}
+                onViewTransporter={onViewTransporter}
+                onAcceptBid={onAcceptBid}
+                currentUserId={currentUserId}
+                transactions={transactions}
             />
         ))}
     </div>
