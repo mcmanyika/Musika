@@ -1,8 +1,8 @@
 import React from 'react';
-import type { Commodity } from '../types';
-import type { SortKey, SortDirection } from '../App';
-import { ArrowUpIcon, ArrowDownIcon, MinusIcon } from './icons/TrendIcons';
-import SortControls from './SortControls';
+import type { Commodity } from '../../types';
+import type { SortKey, SortDirection } from '../../App';
+import { ArrowUpIcon, ArrowDownIcon, MinusIcon } from '../icons/TrendIcons';
+import SortControls from '../ui/SortControls';
 
 interface CommodityListProps {
   commodities: Commodity[];

@@ -1,6 +1,6 @@
 import React from 'react';
-import type { SortKey, SortDirection } from '../App';
-import { ArrowUp, ArrowDown, ArrowsUpDown } from './icons/SortIcons';
+import type { SortKey, SortDirection } from '../../App';
+import { ArrowUp, ArrowDown, ArrowsUpDown } from '../icons/SortIcons';
 
 interface SortControlsProps {
     sortConfig: { key: SortKey, direction: SortDirection };

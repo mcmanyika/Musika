@@ -1,10 +1,11 @@
 import React from 'react';
 
-type TabId = 'orders' | 'yields' | 'prices' | 'transport';
+type TabId = 'orders' | 'yields' | 'prices' | 'transport' | 'transactions' | 'listings';
 
 interface Tab {
   id: TabId;
   label: string;
+  requiresAuth?: boolean;
 }
 
 const tabs: Tab[] = [
@@ -12,14 +13,19 @@ const tabs: Tab[] = [
   { id: 'prices', label: 'Market Prices' },
   { id: 'orders', label: 'Buyer Orders' },
   { id: 'transport', label: 'Transport Gigs' },
+  { id: 'listings', label: 'My Listings', requiresAuth: true },
+  { id: 'transactions', label: 'My Transactions', requiresAuth: true },
 ];
 
 interface TabsProps {
   activeTab: TabId;
   onTabClick: (tabId: TabId) => void;
+  isAuthenticated?: boolean;
 }
 
-const Tabs: React.FC<TabsProps> = ({ activeTab, onTabClick }) => {
+const Tabs: React.FC<TabsProps> = ({ activeTab, onTabClick, isAuthenticated = false }) => {
+  const visibleTabs = tabs.filter(tab => !tab.requiresAuth || isAuthenticated);
+
   return (
     <div>
       <div className="sm:hidden">
@@ -33,7 +39,7 @@ const Tabs: React.FC<TabsProps> = ({ activeTab, onTabClick }) => {
           value={activeTab}
           onChange={(e) => onTabClick(e.target.value as TabId)}
         >
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <option key={tab.id} value={tab.id}>{tab.label}</option>
           ))}
         </select>
@@ -41,7 +47,7 @@ const Tabs: React.FC<TabsProps> = ({ activeTab, onTabClick }) => {
       <div className="hidden sm:block">
         <div className="border-b border-slate-200 dark:border-slate-700">
           <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-            {tabs.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => onTabClick(tab.id)}

@@ -1,7 +1,8 @@
 
 import React, { useMemo } from 'react';
-import type { ProducerYield, BuyerOrder } from '../types';
-import LoadingSpinner from './LoadingSpinner';
+import type { ProducerYield, BuyerOrder, UserRatingStats } from '../../types';
+import LoadingSpinner from '../layout/LoadingSpinner';
+import StarRating from '../ui/StarRating';
 
 interface YieldListProps {
   yields: ProducerYield[];
@@ -10,6 +11,7 @@ interface YieldListProps {
   searchQuery: string;
   isPreloading: boolean;
   onPreloadData: () => void;
+  userRatingStatsMap?: Record<string, UserRatingStats>;
 }
 
 const formatPrice = (price: number) => {
@@ -43,7 +45,12 @@ const formatDate = (dateString: string) => {
 };
 
 
-const YieldItem: React.FC<{ yieldPost: ProducerYield; orders: BuyerOrder[]; onMakeOffer: (yieldPost: ProducerYield) => void; }> = ({ yieldPost, orders, onMakeOffer }) => {
+const YieldItem: React.FC<{ 
+  yieldPost: ProducerYield; 
+  orders: BuyerOrder[]; 
+  onMakeOffer: (yieldPost: ProducerYield) => void;
+  userRatingStatsMap?: Record<string, UserRatingStats>;
+}> = ({ yieldPost, orders, onMakeOffer, userRatingStatsMap }) => {
     
     const { offerCount, highestOffer } = useMemo(() => {
         const relevantOffers = orders.filter(o => o.yieldId === yieldPost.id);
@@ -77,6 +84,15 @@ const YieldItem: React.FC<{ yieldPost: ProducerYield; orders: BuyerOrder[]; onMa
                     <div className="text-right">
                         <p className="font-semibold text-md text-emerald-600 dark:text-emerald-400">Available From</p>
                         <p className="text-sm text-slate-500 dark:text-slate-400">{formatDate(yieldPost.expectedDate)}</p>
+                        {userRatingStatsMap && (
+                            <div className="mt-2 flex justify-end">
+                                <StarRating
+                                    rating={userRatingStatsMap[yieldPost.user_id]?.average_overall || 0}
+                                    size="sm"
+                                    readOnly
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex justify-between items-center">
@@ -103,7 +119,7 @@ const YieldItem: React.FC<{ yieldPost: ProducerYield; orders: BuyerOrder[]; onMa
 };
 
 
-const YieldList: React.FC<YieldListProps> = ({ yields, orders, onMakeOffer, searchQuery, isPreloading, onPreloadData }) => {
+const YieldList: React.FC<YieldListProps> = ({ yields, orders, onMakeOffer, searchQuery, isPreloading, onPreloadData, userRatingStatsMap }) => {
   if (yields.length === 0) {
     return (
       <div className="flex items-center justify-center h-full bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6 min-h-[200px]">
@@ -136,7 +152,13 @@ const YieldList: React.FC<YieldListProps> = ({ yields, orders, onMakeOffer, sear
   return (
     <div className="space-y-3">
         {yields.map(yieldPost => (
-            <YieldItem key={yieldPost.id} yieldPost={yieldPost} orders={orders} onMakeOffer={onMakeOffer} />
+            <YieldItem 
+                key={yieldPost.id} 
+                yieldPost={yieldPost} 
+                orders={orders} 
+                onMakeOffer={onMakeOffer}
+                userRatingStatsMap={userRatingStatsMap}
+            />
         ))}
     </div>
   );

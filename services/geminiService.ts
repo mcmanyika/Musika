@@ -4,10 +4,15 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { Commodity } from '../types';
 
 const fetchCommodityPrices = async (): Promise<Commodity[]> => {
-  if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set");
+  // Try both API_KEY and GEMINI_API_KEY for flexibility
+  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    console.error("API key not found. Checked process.env.API_KEY and process.env.GEMINI_API_KEY");
+    throw new Error("API_KEY environment variable not set. Please set GEMINI_API_KEY in your .env file.");
   }
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  const ai = new GoogleGenAI({ apiKey });
 
   const commoditySchema = {
     type: Type.OBJECT,
@@ -33,49 +38,80 @@ const fetchCommodityPrices = async (): Promise<Commodity[]> => {
     required: ["id", "name", "unit", "price", "priceChange", "history"],
   };
 
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `
-        You are a market analyst specializing in Zimbabwean agriculture. Generate a realistic list of 12 common commodities found at Mbare Musika in Harare.
-        For each commodity, provide its details in USD. The list should include local staples like maize meal, vegetables (tomatoes, onions, leafy greens), fruits, and other common goods.
-        The price history should span the last 7 days, with the most recent date being today.
-        Ensure the data is varied and reflects typical local market fluctuations.
-      `,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: commoditySchema,
-        },
-      },
-    });
+  // Try multiple model names in case one is unavailable
+  const modelsToTry = ["gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-pro"];
+  let lastError: any = null;
 
-    const jsonText = response.text?.trim();
-
-    if (!jsonText) {
-      console.error("Gemini API returned an empty response text.");
-      throw new Error("API returned an empty response.");
-    }
-    
-    let data;
+  for (const modelName of modelsToTry) {
     try {
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: `
+          You are a market analyst specializing in Zimbabwean agriculture. Generate a realistic list of 12 common commodities found at Mbare Musika in Harare.
+          For each commodity, provide its details in USD. The list should include local staples like maize meal, vegetables (tomatoes, onions, leafy greens), fruits, and other common goods.
+          The price history should span the last 7 days, with the most recent date being today.
+          Ensure the data is varied and reflects typical local market fluctuations.
+        `,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: commoditySchema,
+          },
+        },
+      });
+
+      const jsonText = response.text?.trim();
+
+      if (!jsonText) {
+        console.warn(`Model ${modelName} returned an empty response. Trying next model...`);
+        continue;
+      }
+
+      let data;
+      try {
         data = JSON.parse(jsonText);
-    } catch (parseError) {
-        console.error("Failed to parse JSON response from Gemini API:", parseError);
-        console.error("Raw response text:", jsonText);
-        throw new Error("API returned malformed data.");
+      } catch (parseError) {
+        console.warn(`Failed to parse JSON response from model ${modelName}:`, parseError);
+        continue;
+      }
+
+      if (!Array.isArray(data)) {
+        console.warn(`Model ${modelName} did not return an array. Trying next model...`);
+        continue;
+      }
+
+      console.log(`Successfully fetched data using model: ${modelName}`);
+      return data as Commodity[];
+    } catch (error: any) {
+      console.warn(`Model ${modelName} failed:`, error?.message || error);
+      lastError = error;
+      // Try next model
+      continue;
     }
-    
-    if (!Array.isArray(data)) {
-        console.error("Parsed data is not an array:", data);
-        throw new Error("API did not return an array");
+  }
+
+  // If we get here, all models failed
+  try {
+    throw lastError || new Error("All models failed");
+  } catch (error: any) {
+    // Preserve the actual error message for debugging
+    console.error("Error fetching or parsing commodity prices from Gemini:", error);
+    const errorMessage = error?.message || error?.toString() || "Unknown error";
+
+    // Provide more helpful error messages
+    if (errorMessage.includes("API_KEY") || errorMessage.includes("apiKey")) {
+      throw new Error("Gemini API key is invalid or not set. Please check your GEMINI_API_KEY environment variable.");
+    }
+    if (errorMessage.includes("model") || errorMessage.includes("Model")) {
+      throw new Error(`Gemini model error: ${errorMessage}`);
+    }
+    if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
+      throw new Error("Network error: Could not connect to Gemini API. Please check your internet connection.");
     }
 
-    return data as Commodity[];
-  } catch (error) {
-    console.error("Error fetching or parsing commodity prices from Gemini:", error);
-    throw new Error("Failed to get valid data from Gemini API.");
+    // Throw the actual error message instead of a generic one
+    throw new Error(`Failed to fetch commodity prices: ${errorMessage}`);
   }
 };
 

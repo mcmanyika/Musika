@@ -1,11 +1,14 @@
 import React, { useMemo } from 'react';
-import type { BuyerOrder, TransportBid } from '../types';
+import type { BuyerOrder, TransportBid, UserRatingStats, ProducerYield } from '../../types';
+import StarRating from '../ui/StarRating';
 
 interface TransportListProps {
   deals: BuyerOrder[];
   bids: TransportBid[];
   onPlaceBid: (deal: BuyerOrder) => void;
   searchQuery: string;
+  yields?: ProducerYield[];
+  userRatingStatsMap?: Record<string, UserRatingStats>;
 }
 
 const formatPrice = (price: number) => {
@@ -15,7 +18,13 @@ const formatPrice = (price: number) => {
     }).format(price);
 };
 
-const DealItem: React.FC<{ deal: BuyerOrder; bids: TransportBid[]; onPlaceBid: (deal: BuyerOrder) => void; }> = ({ deal, bids, onPlaceBid }) => {
+const DealItem: React.FC<{ 
+  deal: BuyerOrder; 
+  bids: TransportBid[]; 
+  onPlaceBid: (deal: BuyerOrder) => void;
+  yields?: ProducerYield[];
+  userRatingStatsMap?: Record<string, UserRatingStats>;
+}> = ({ deal, bids, onPlaceBid, yields, userRatingStatsMap }) => {
     const { bidCount, lowestBid } = useMemo(() => {
         const relevantBids = bids.filter(b => b.orderId === deal.id);
         const count = relevantBids.length;
@@ -38,8 +47,29 @@ const DealItem: React.FC<{ deal: BuyerOrder; bids: TransportBid[]; onPlaceBid: (
                 </div>
             </div>
             <div className="mt-3 text-sm text-slate-600 dark:text-slate-300 space-y-1">
-                <p><span className="font-semibold">From (Producer):</span> {deal.producerName}</p>
-                <p><span className="font-semibold">To (Buyer):</span> {deal.buyerName}</p>
+                <div className="flex items-center gap-2">
+                    <p><span className="font-semibold">From (Producer):</span> {deal.producerName}</p>
+                    {userRatingStatsMap && deal.yieldId && yields && (() => {
+                        const yieldPost = yields.find(y => y.id === deal.yieldId);
+                        return yieldPost ? (
+                            <StarRating
+                                rating={userRatingStatsMap[yieldPost.user_id]?.average_overall || 0}
+                                size="sm"
+                                readOnly
+                            />
+                        ) : null;
+                    })()}
+                </div>
+                <div className="flex items-center gap-2">
+                    <p><span className="font-semibold">To (Buyer):</span> {deal.buyerName}</p>
+                    {userRatingStatsMap && (
+                        <StarRating
+                            rating={userRatingStatsMap[deal.user_id]?.average_overall || 0}
+                            size="sm"
+                            readOnly
+                        />
+                    )}
+                </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex justify-between items-center">
                 <div className="text-sm">
@@ -64,7 +94,7 @@ const DealItem: React.FC<{ deal: BuyerOrder; bids: TransportBid[]; onPlaceBid: (
 };
 
 
-const TransportList: React.FC<TransportListProps> = ({ deals, bids, onPlaceBid, searchQuery }) => {
+const TransportList: React.FC<TransportListProps> = ({ deals, bids, onPlaceBid, searchQuery, yields, userRatingStatsMap }) => {
   if (deals.length === 0) {
     return (
       <div className="flex items-center justify-center h-full bg-slate-50 dark:bg-slate-800/50 rounded-lg p-6 min-h-[300px]">
@@ -86,7 +116,14 @@ const TransportList: React.FC<TransportListProps> = ({ deals, bids, onPlaceBid, 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {deals.map(deal => (
-            <DealItem key={deal.id} deal={deal} bids={bids} onPlaceBid={onPlaceBid} />
+            <DealItem 
+                key={deal.id} 
+                deal={deal} 
+                bids={bids} 
+                onPlaceBid={onPlaceBid}
+                yields={yields}
+                userRatingStatsMap={userRatingStatsMap}
+            />
         ))}
     </div>
   );

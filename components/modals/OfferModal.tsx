@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { ProducerYield, BuyerOrder } from '../types';
+import type { ProducerYield, BuyerOrder } from '../../types';
 
 interface OfferModalProps {
   yieldPost: ProducerYield;
@@ -12,43 +12,60 @@ const OfferModal: React.FC<OfferModalProps> = ({ yieldPost, isOpen, onClose, onA
   const [quantity, setQuantity] = useState<string>('');
   const [offerPrice, setOfferPrice] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   if (!isOpen) {
     return null;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
 
     const numQuantity = parseFloat(quantity);
     const numOfferPrice = parseFloat(offerPrice);
 
     if (!quantity || !offerPrice) {
       setError('All fields are required.');
+      setIsSubmitting(false);
       return;
     }
     if (isNaN(numQuantity) || numQuantity <= 0) {
       setError('Please enter a valid quantity.');
+      setIsSubmitting(false);
       return;
     }
     if (numQuantity > yieldPost.expectedQuantity) {
         setError(`Quantity cannot exceed the available ${yieldPost.expectedQuantity} ${yieldPost.commodityUnit}(s).`);
+        setIsSubmitting(false);
         return;
     }
     if (isNaN(numOfferPrice) || numOfferPrice <= 0) {
       setError('Please enter a valid offer price.');
+      setIsSubmitting(false);
       return;
     }
 
-    onAddOrder({
-      commodityName: yieldPost.commodityName,
-      commodityUnit: yieldPost.commodityUnit,
-      quantity: numQuantity,
-      offerPrice: numOfferPrice,
-      yieldId: yieldPost.id,
-      producerName: yieldPost.producerName,
-    });
+    try {
+      await onAddOrder({
+        commodityName: yieldPost.commodityName,
+        commodityUnit: yieldPost.commodityUnit,
+        quantity: numQuantity,
+        offerPrice: numOfferPrice,
+        yieldId: yieldPost.id,
+        producerName: yieldPost.producerName,
+      });
+      
+      // Reset form fields after successful submission
+      setQuantity('');
+      setOfferPrice('');
+      setError(null);
+    } catch (err) {
+      setError('Failed to submit offer. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -106,9 +123,10 @@ const OfferModal: React.FC<OfferModalProps> = ({ yieldPost, isOpen, onClose, onA
             </button>
             <button
               type="submit"
-              className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
+              disabled={isSubmitting}
+              className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Submit Offer
+              {isSubmitting ? 'Submitting...' : 'Submit Offer'}
             </button>
           </div>
         </form>

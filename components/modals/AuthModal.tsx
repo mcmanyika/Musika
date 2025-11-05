@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import LoadingSpinner from './LoadingSpinner';
+import LoadingSpinner from '../layout/LoadingSpinner';
 
 interface AuthModalProps {
   onSignIn: (email: string) => Promise<void>;

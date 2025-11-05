@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Commodity } from '../types';
+import type { Commodity } from '../../types';
 
 interface CompactCommodityListProps {
   commodities: Commodity[];

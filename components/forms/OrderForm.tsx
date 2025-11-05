@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Commodity, BuyerOrder } from '../types';
+import type { Commodity, BuyerOrder } from '../../types';
 
 interface OrderFormProps {
   commodities: Commodity[];

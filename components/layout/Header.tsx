@@ -1,12 +1,14 @@
 import React from 'react';
 // FIX: Import User type from the local types.ts file
-import type { Theme, User } from '../types';
+import type { Theme, User, UserProfile } from '../../types';
 
 interface HeaderProps {
     currentUser: User | null;
+    userProfile?: UserProfile | null;
     onSignOut: () => void;
     theme: Theme;
     onThemeToggle: () => void;
+    onProfileClick?: () => void;
 }
 
 const ThemeToggleButton: React.FC<{ theme: Theme; onToggle: () => void }> = ({ theme, onToggle }) => (
@@ -27,7 +29,13 @@ const ThemeToggleButton: React.FC<{ theme: Theme; onToggle: () => void }> = ({ t
     </button>
 );
 
-export const Header: React.FC<HeaderProps> = ({ currentUser, onSignOut, theme, onThemeToggle }) => {
+export const Header: React.FC<HeaderProps> = ({ currentUser, userProfile, onSignOut, theme, onThemeToggle, onProfileClick }) => {
+  // Use profile full_name if available, otherwise fallback to email
+  const displayName = userProfile?.full_name || currentUser?.email || 'User';
+  const displayTooltip = userProfile?.full_name 
+    ? `${userProfile.full_name} (${currentUser?.email})` 
+    : currentUser?.email || '';
+
   return (
     <header className="bg-white dark:bg-slate-800 shadow-sm dark:shadow-none dark:border-b dark:border-slate-700 transition-colors">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
@@ -36,15 +44,25 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, onSignOut, theme, o
             Musika
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-1">
-            Daily prices and market data from Mbare Musika.
+            From Farm To Market, Simplified.
             </p>
         </div>
         <div className="flex items-center space-x-2 sm:space-x-4">
             {currentUser && (
                 <>
-                    <span className="text-sm text-slate-600 dark:text-slate-300 hidden sm:block truncate max-w-[200px]" title={currentUser.email}>
-                        Welcome, <span className="font-semibold">{currentUser.email}</span>
-                    </span>
+                    {onProfileClick ? (
+                      <button
+                        onClick={onProfileClick}
+                        className="text-sm text-slate-600 dark:text-slate-300 hidden sm:block truncate max-w-[200px] hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
+                        title={`View profile: ${displayTooltip}`}
+                      >
+                        Welcome, <span className="font-semibold">{displayName}</span>
+                      </button>
+                    ) : (
+                      <span className="text-sm text-slate-600 dark:text-slate-300 hidden sm:block truncate max-w-[200px]" title={displayTooltip}>
+                        Welcome, <span className="font-semibold">{displayName}</span>
+                      </span>
+                    )}
                     <button
                         onClick={onSignOut}
                         className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 dark:focus:ring-offset-slate-800 transition-colors"

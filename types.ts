@@ -26,7 +26,7 @@ export interface BuyerOrder {
 }
 
 export interface ProducerYield {
-  id:string;
+  id: string;
   user_id: string;
   commodityName: string;
   commodityUnit: string;
@@ -57,6 +57,59 @@ export interface User {
   aud: string;
   created_at: string;
   // Add other properties as needed by your application
+}
+
+export interface UserProfile {
+  user_id: string;
+  full_name?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  business_name?: string;
+  business_type?: string;
+  registration_number?: string;
+  business_address?: string;
+  profile_photo_url?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Rating {
+  id: string;
+  transaction_id: string;
+  rater_id: string;
+  rated_user_id: string;
+  rating_type: 'buyer_to_seller' | 'seller_to_buyer';
+  quality_rating: number;
+  communication_rating: number;
+  timeliness_rating: number;
+  overall_rating: number;
+  review_text?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TransactionHistory {
+  id: string;
+  order_id: string;
+  yield_id: string;
+  buyer_id: string;
+  seller_id: string;
+  transport_bid_id?: string;
+  status: 'pending' | 'in_transit' | 'delivered' | 'cancelled';
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserRatingStats {
+  user_id: string;
+  total_ratings: number;
+  average_overall: number;
+  average_quality: number;
+  average_communication: number;
+  average_timeliness: number;
 }
 
 

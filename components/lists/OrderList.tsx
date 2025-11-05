@@ -1,13 +1,15 @@
 
 import React from 'react';
-import type { BuyerOrder } from '../types';
-import LoadingSpinner from './LoadingSpinner';
+import type { BuyerOrder, UserRatingStats } from '../../types';
+import LoadingSpinner from '../layout/LoadingSpinner';
+import StarRating from '../ui/StarRating';
 
 interface OrderListProps {
   orders: BuyerOrder[];
   searchQuery: string;
   isPreloading: boolean;
   onPreloadData: () => void;
+  userRatingStatsMap?: Record<string, UserRatingStats>;
 }
 
 const formatPrice = (price: number) => {
@@ -34,7 +36,10 @@ const formatTimeAgo = (dateString: string): string => {
 }
 
 
-const OrderItem: React.FC<{ order: BuyerOrder }> = ({ order }) => {
+const OrderItem: React.FC<{ 
+  order: BuyerOrder;
+  userRatingStatsMap?: Record<string, UserRatingStats>;
+}> = ({ order, userRatingStatsMap }) => {
     const isOffer = !!order.yieldId;
 
     return (
@@ -60,9 +65,16 @@ const OrderItem: React.FC<{ order: BuyerOrder }> = ({ order }) => {
                 </div>
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex justify-between items-center">
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-300 truncate" title={order.buyerName}>
-                    Buyer: <span className="font-normal">{order.buyerName}</span>
-                </p>
+                <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300 truncate" title={order.buyerName}>
+                        Buyer: <span className="font-normal">{order.buyerName}</span>
+                    </p>
+                    <StarRating
+                        rating={userRatingStatsMap?.[order.user_id]?.average_overall || 0}
+                        size="sm"
+                        readOnly
+                    />
+                </div>
                 <p className="text-xs text-slate-400 dark:text-slate-500">{formatTimeAgo(order.timestamp)}</p>
             </div>
         </div>
@@ -70,7 +82,7 @@ const OrderItem: React.FC<{ order: BuyerOrder }> = ({ order }) => {
 };
 
 
-const OrderList: React.FC<OrderListProps> = ({ orders, searchQuery, isPreloading, onPreloadData }) => {
+const OrderList: React.FC<OrderListProps> = ({ orders, searchQuery, isPreloading, onPreloadData, userRatingStatsMap }) => {
   if (orders.length === 0) {
     return (
       <div className="flex items-center justify-center h-full bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6 min-h-[200px]">
@@ -103,7 +115,7 @@ const OrderList: React.FC<OrderListProps> = ({ orders, searchQuery, isPreloading
   return (
     <div className="space-y-3">
         {orders.map(order => (
-            <OrderItem key={order.id} order={order} />
+            <OrderItem key={order.id} order={order} userRatingStatsMap={userRatingStatsMap} />
         ))}
     </div>
   );

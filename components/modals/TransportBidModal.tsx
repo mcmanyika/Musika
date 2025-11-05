@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { BuyerOrder, TransportBid } from '../types';
+import type { BuyerOrder, TransportBid } from '../../types';
 
 interface TransportBidModalProps {
   deal: BuyerOrder;

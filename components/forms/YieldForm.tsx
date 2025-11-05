@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Commodity, ProducerYield } from '../types';
+import type { Commodity, ProducerYield } from '../../types';
 
 interface YieldFormProps {
   commodities: Commodity[];
